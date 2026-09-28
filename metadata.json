@@ -1,0 +1,6 @@
+{
+  "name": "FIND BACK - Dr. RVR NRI University",
+  "description": "Official Lost & Found platform for Dr. RVR NRI University, Agiripalli. Mobile-first system to report, match, verify ownership, and return campus items.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

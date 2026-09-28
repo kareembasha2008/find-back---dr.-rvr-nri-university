@@ -280,13 +280,13 @@ app.post('/api/gemini/chat', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Messages array is required.' });
     }
 
-    // Select model based on complexity requirement
-    let modelName = 'gemini-3.5-flash';
-    if (taskComplexity === 'fast') {
-      modelName = 'gemini-3.1-flash-lite';
-    } else if (taskComplexity === 'complex') {
-      modelName = 'gemini-3.1-pro-preview';
-    }
+    // Select candidate models in priority order
+    const candidateModels = [
+      taskComplexity === 'fast' ? 'gemini-3.5-flash-lite' : 'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+    ];
 
     const systemInstruction = `You are "FIND BACK AI", the official campus assistant for Dr. RVR NRI University in Agiripalli, Andhra Pradesh.
 Your duties:
@@ -307,21 +307,28 @@ Your duties:
     }));
 
     let reply = '';
+    let selectedModel = 'campus-knowledge-engine';
     const hasKey = apiKey && apiKey !== 'YOUR_GEMINI_API_KEY';
 
     if (hasKey) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents,
-          config: {
-            systemInstruction,
-            temperature: 0.7,
-          },
-        });
-        reply = response.text || '';
-      } catch (genErr) {
-        console.warn('Gemini API call failed, using campus knowledge engine:', genErr);
+      for (const mName of candidateModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model: mName,
+            contents,
+            config: {
+              systemInstruction,
+              temperature: 0.7,
+            },
+          });
+          if (response.text) {
+            reply = response.text;
+            selectedModel = mName;
+            break;
+          }
+        } catch (genErr: any) {
+          console.warn(`Gemini API call with ${mName} notice:`, genErr?.message || genErr);
+        }
       }
     }
 
@@ -341,7 +348,7 @@ Your duties:
       }
     }
 
-    res.json({ reply, model: hasKey ? modelName : 'campus-knowledge-engine' });
+    res.json({ reply, model: hasKey ? selectedModel : 'campus-knowledge-engine' });
   } catch (error: any) {
     console.error('Error in /api/gemini/chat:', error);
     res.status(500).json({

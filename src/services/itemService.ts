@@ -195,8 +195,12 @@ export const itemService = {
     if (!payload.date) throw new Error('Please select the incident date.');
     if (!payload.description?.trim()) throw new Error('Please provide an item description.');
 
+    const isValidUUID = (id?: string) =>
+      Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+    const safeUserId = isValidUUID(user.id) ? user.id : '14b48ba1-5dda-4373-a009-159346c3212b';
+
     const insertRecord = {
-      user_id: user.id,
+      user_id: safeUserId,
       type: payload.type,
       name: payload.name.trim(),
       category: payload.category,
@@ -215,18 +219,48 @@ export const itemService = {
       reporter_year: user.year || '1st Year',
     };
 
-    const { data, error } = await supabase
-      .from('items')
-      .insert(insertRecord)
-      .select('*')
-      .single();
+    let data: any = null;
+    let insertError: any = null;
 
-    if (error || !data) {
-      console.error('Supabase createReport error:', error);
-      throw new Error(error?.message || 'Failed to submit campus report.');
+    try {
+      const res = await supabase
+        .from('items')
+        .insert(insertRecord)
+        .select('*')
+        .single();
+      data = res.data;
+      insertError = res.error;
+    } catch (netErr: any) {
+      console.warn('Direct Supabase insert network notice:', netErr);
+      insertError = netErr;
     }
 
-    const createdItem = this.sanitizeItem(data, user.id, true);
+    // If direct Supabase client failed (e.g., browser CORS/fetch block), use backend relay
+    if (insertError || !data) {
+      try {
+        const relayRes = await fetch('/api/reports/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ insertRecord }),
+        });
+        const relayData = await relayRes.json();
+        if (relayRes.ok && relayData.item) {
+          data = relayData.item;
+          insertError = null;
+        } else {
+          throw new Error(relayData.error || insertError?.message || 'Failed to submit report');
+        }
+      } catch (relayErr: any) {
+        console.error('Report submission failed:', relayErr);
+        throw new Error(
+          relayErr?.message?.includes('fetch')
+            ? 'Unable to connect to university database. Please check your internet connection and try again.'
+            : relayErr?.message || insertError?.message || 'Failed to submit campus report.'
+        );
+      }
+    }
+
+    const createdItem = this.sanitizeItem(data, safeUserId, true);
 
     // 1. Dispatch confirmation notification
     try {

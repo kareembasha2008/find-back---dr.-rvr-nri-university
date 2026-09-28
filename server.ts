@@ -267,6 +267,46 @@ app.post('/api/verify/check-code', (req: Request, res: Response) => {
   }
 });
 
+// 3. Server-side relay for report creation (guarantees persistence even if browser has direct fetch/CORS blocks)
+app.post('/api/reports/create', async (req: Request, res: Response) => {
+  try {
+    const { insertRecord } = req.body;
+    if (!insertRecord || !insertRecord.name) {
+      return res.status(400).json({ error: 'Item report details are required.' });
+    }
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://jpqwzeqvahvodbwkngju.supabase.co';
+    const supabaseKey =
+      process.env.VITE_SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcXd6ZXF2YWh2b2Rid2tuZ2p1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MTE3MzgsImV4cCI6MjA5ODA4NzczOH0.54PUkb1W8xRRA35X0eRBTvxOlBtWp8UPbqOY01ykkAk';
+
+    const resp = await fetch(`${supabaseUrl}/rest/v1/items`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify(insertRecord),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      console.error('Server relay report insert error:', data);
+      return res.status(resp.status).json({
+        error: data?.message || data?.error || 'Failed to insert report via server relay.',
+      });
+    }
+
+    const createdItem = Array.isArray(data) ? data[0] : data;
+    res.json({ success: true, item: createdItem });
+  } catch (err: any) {
+    console.error('Error in /api/reports/create:', err);
+    res.status(500).json({ error: err?.message || 'Server error creating report.' });
+  }
+});
+
 /**
  * Multi-Turn Chatbot API
  * Uses Gemini models to assist students with campus lost and found, handover spots, and university procedures.

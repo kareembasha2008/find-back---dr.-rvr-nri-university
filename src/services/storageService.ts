@@ -62,25 +62,29 @@ export const storageService = {
       return this.processAndCompressImage(file);
     }
 
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-    const filePath = `items/${userId}/${fileName}`;
+    try {
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const filePath = `items/${userId}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(ITEM_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+      const { error: uploadError } = await supabase.storage
+        .from(ITEM_BUCKET)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-    if (uploadError) {
-      console.error('Supabase Storage upload error:', uploadError);
-      // Fallback to compressed base64 if storage policy error occurs
+      if (uploadError) {
+        console.warn('Supabase Storage upload notice, using compressed image:', uploadError.message);
+        return this.processAndCompressImage(file);
+      }
+
+      const { data } = supabase.storage.from(ITEM_BUCKET).getPublicUrl(filePath);
+      return data.publicUrl;
+    } catch (storageErr) {
+      console.warn('Supabase Storage network error, falling back to local compressed DataURL:', storageErr);
       return this.processAndCompressImage(file);
     }
-
-    const { data } = supabase.storage.from(ITEM_BUCKET).getPublicUrl(filePath);
-    return data.publicUrl;
   },
 
   /**

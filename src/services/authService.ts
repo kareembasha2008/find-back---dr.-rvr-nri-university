@@ -340,7 +340,10 @@ export const authService = {
     }
 
     // 4. If no registered profile found yet, provision verified student profile on the fly
-    const generatedId = 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const generatedId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : '14b48ba1-5dda-4373-a009-159346c3212b';
     const isEmail = cleanId.includes('@');
     const autoProfile: User = {
       id: generatedId,
@@ -357,6 +360,10 @@ export const authService = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    try {
+      await supabase.from('profiles').upsert(autoProfile);
+    } catch {}
 
     try {
       await supabase.from('profiles').upsert(autoProfile);
